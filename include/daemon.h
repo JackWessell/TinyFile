@@ -1,6 +1,3 @@
-#include <signal.h>
-#include <string.h>
-
 #define MAX_LOG_LINE 1024
 #define MAX_PROCESS_LINE 2048
 

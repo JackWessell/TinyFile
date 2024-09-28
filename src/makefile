@@ -13,6 +13,8 @@ DEPS = $(patsubst %,$(IDIR)/%,$(_DEPS))
 _OBJ = TinyFile.o daemon.o signals.o
 OBJ = $(patsubst %,$(ODIR)/%,$(_OBJ))
 
+_OBJ2 = killdaemon.o
+OBJ2 = $(patsubst %,$(ODIR)/%,$(_OBJ2))
 
 $(ODIR)/%.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)
@@ -20,6 +22,8 @@ $(ODIR)/%.o: %.c $(DEPS)
 TinyFile: $(OBJ)
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS) -lrt
 
+kill: $(OBJ)
+	$(CC) $(CFLAGS) killdaemon.c -o killdaemon
 .PHONY: clean
 
 clean:

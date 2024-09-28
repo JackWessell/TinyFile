@@ -24,7 +24,7 @@ int main(int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
     //our daemon has been created. Time to set up shared memory segment. 
-    daemon_log("First daemon started.\n");
+    daemon_log("Daemon started.\n");
     int shm_fd;
     void* shm_ptr;
     shm_name = NAME;
@@ -40,8 +40,7 @@ int main(int argc, char* argv[]) {
     while (1)
     {
         //TODO: Insert daemon code here.
-        
-        sleep (20);
+        sleep (25);
         break;
     }
     cleanup_daemon();

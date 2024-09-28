@@ -1,0 +1,1 @@
+This is a library for interacting with the TinyFile daemon. It will communicate with the daemon to access shared resources. Then, the client can make either blocking or non-blocking calls to the Daemon in order to receive a compressed file.

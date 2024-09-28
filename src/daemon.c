@@ -73,6 +73,7 @@ int daemon_pid(){
         }
     }
     //if we've made it this far, we are the existing daemon and can overwrite the file with our pid. Safely exit after that.
+    lseek(res, 0, SEEK_SET);
     write(res, &curr, sizeof(int));
     return 1; 
 }
