@@ -18,7 +18,10 @@ void install_signal_handler(int signo, void (*handler)()){
 	/* Setup the handler */
 	act.sa_handler = handler;
 	act.sa_flags = SA_RESTART;
-	sigaction(signo, &act,0);
+	if(!sigaction(signo, &act,0)){
+		//perror("Signal handler:");
+		int num = 0;
+	}
 
 	/* Unblock the signal */
 	sigemptyset(&set);
@@ -47,5 +50,18 @@ void unblock_signal(int signo){
 	sigaddset(&set, signo);
 	sigprocmask(SIG_UNBLOCK, &set, NULL);
 
+	return;
+}
+
+void init_vtalrm_timeslice()
+{
+	struct itimerval timeslice;
+
+	timeslice.it_interval.tv_sec = VTALRM_SEC;
+	timeslice.it_interval.tv_usec = VTALRM_USEC;
+	timeslice.it_value.tv_sec = VTALRM_SEC;
+	timeslice.it_value.tv_usec = VTALRM_USEC;
+
+	setitimer(ITIMER_VIRTUAL,&timeslice,NULL);
 	return;
 }

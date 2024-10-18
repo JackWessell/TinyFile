@@ -1,22 +1,16 @@
-#include <fcntl.h>
-#include <signal.h>
-#include <string.h>
 #include <errno.h>
 #include <stdio.h>
-#include <unistd.h>
-#include <sys/syscall.h>
+#include <string.h>
 
-#include "daemon.h"
-//When called, this function will issue the SIGTERM signal to the Daemon, causing it to execute its termination and clean-up protocol
-int main(int argc, char* argv[]){
+#include "utils.h"
+int daemon_running(daemon_t *daemon){
     //Open the PID file to find the PID of the most recently initialized Daemon.
-    int res = open(PID_FILE,  O_RDWR, 0644);
-    if(res == -1){
+    FILE *file = fopen("../TinyFile.pid",  "r");
+    if(file == NULL){
         perror("Failed to open PID file. Exiting...");
         return -1;
     }
-    int proc;
-    read(res, &proc, sizeof(int));
+    fread(&(daemon->pid), sizeof(int), 1, file);
     //now, read currently running processes to see if daemon is actually running at the moment.
     FILE *fp;
     char line[MAX_PROCESS_LINE];
@@ -27,12 +21,11 @@ int main(int argc, char* argv[]){
     }
     //iterate over processes in the system, ensuring that the daemon is currently running.
     char running = 0;
-    printf("%d, \n", proc);
     while (fgets(line, MAX_PROCESS_LINE, fp) != NULL) {
         if (strstr(line, "PID") == NULL) {
             int pid;
             sscanf(line, "%d", &pid);
-            if(pid == proc){
+            if(pid == daemon->pid){
                 running = 1;
                 break;
             }
@@ -42,7 +35,7 @@ int main(int argc, char* argv[]){
         printf("Daemon is not running!");
         return -1;
     }
-    //if we made it to this point, issue the signal to the daemon. It will never block the SIGTERM signal, so we shouldn't require any complex waiting process.
-    syscall(__NR_tkill, proc, SIGTERM);
+    //If we have made it here, the daemon is currently running.
+    fread(&(daemon->msg), sizeof(char), 9, file);
     return 1;
 }

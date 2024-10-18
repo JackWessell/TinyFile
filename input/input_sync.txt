@@ -1,0 +1,10 @@
+../input/Tiny.txt
+0
+../input/Small.jpg
+0
+../input/Medium.pdf
+0
+../input/Large.txt
+0
+../input/Huge.jpg
+0

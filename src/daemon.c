@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <signal.h>
 #include <string.h>
 #include <fcntl.h>
@@ -11,9 +12,12 @@
 #include <sys/shm.h>
 #include <sys/mman.h>
 #include <fcntl.h>  
+#include <mqueue.h>
+#include <pthread.h>
 
 #include "daemon.h"
 #include "signals.h"
+
 
 void daemon_log(const char *format, char *error, int errnum) {
     if (log_fd == -1) return;  // Logging not initialized
@@ -24,19 +28,19 @@ void daemon_log(const char *format, char *error, int errnum) {
     ctime_r(&now, timestamp);
     timestamp[24] = '\0';  // Remove newline
 
-    char message[MAX_LOG_LINE];
+    char message[MAX_LOG_LINE - 26];
     //va_list args;
     //va_start(args, format);
     //vsnprintf(message, sizeof(message), format, args);
     if(errnum == 1){
-        snprintf(message,  sizeof(message), "%s. Error: %s",  format, error);
+        snprintf(message,  MAX_LOG_LINE, "%s. Error: %s",  format, error);
     }
     else{
-        snprintf(message,  sizeof(message), "%s",  format);
+        snprintf(message,  MAX_LOG_LINE, "%s",  format);
     }
     
     char log_line[MAX_LOG_LINE];
-    snprintf(log_line, sizeof(log_line), "[%s] %s\n", timestamp, message);
+    snprintf(log_line, MAX_LOG_LINE, "Thread: %d, [%s] %s\n", gettid(), timestamp, message);
 
     write(log_fd, log_line, strlen(log_line));
     return;
@@ -46,13 +50,14 @@ int daemon_pid(){
     //This ensures that the daemon cannot be started more than once and that we must shut down the daemon after initialization.
     //Additionally, users of the daemon will know which process to send their signals to.
     pid_t curr = getpid();
-    int res = open(PID_FILE, O_CREAT | O_RDWR, 0644);
-    if(res == -1){
+    FILE* pid_file;
+    pid_file = fopen(PID_FILE, "r+");
+    if(pid_file == NULL){
         daemon_log("Failed to create PID file. Exiting...", strerror(errno), 1);
         return -1;
     }
     int proc;
-    read(res, &proc, sizeof(int));
+    fread(&proc, sizeof(int), 1, pid_file);
     //now, read currently running processes
     FILE *fp;
     char line[MAX_PROCESS_LINE];
@@ -73,8 +78,10 @@ int daemon_pid(){
         }
     }
     //if we've made it this far, we are the existing daemon and can overwrite the file with our pid. Safely exit after that.
-    lseek(res, 0, SEEK_SET);
-    write(res, &curr, sizeof(int));
+    fseek(pid_file, 0, SEEK_SET);
+    fwrite(&curr, sizeof(int), 1, pid_file);
+    fwrite(&MQ_NAME, sizeof(char), strlen(MQ_NAME), pid_file);
+    fflush(pid_file);
     return 1; 
 }
 void reset_all_signal_handlers() {
@@ -126,18 +133,33 @@ void redirect_standard_streams() {
     }
     return;
 }
-extern char* shm_name;
+extern char* shm_name[MAX_NUM];
+extern int num_segs;
+extern pthread_t threads[MAX_NUM];
+extern int parent;
 void cleanup_daemon() {
     //daemon performs a clean-up before it exits.
-    //later, this will include the destruction of shared memory segments and  message queues (possibly? I don't know how they work yet lol).
+    //First, close down all children.
+    if(gettid() != parent){
+        int retval;
+        pthread_exit(&retval);
+    }
     if (log_fd != -1) {
         daemon_log("Daemon shutting down", "",0);
         close(log_fd);
         log_fd = -1;
     }
-    shm_unlink(shm_name);
-    return;
-    // Add any other cleanup tasks here. Eventually daemon will need to release shared memory, dynamically allocated memory, etc.
+    for(int i = 0; i < num_segs; i++){
+        daemon_log(shm_name[i], strerror(errno), 1);
+        if(shm_unlink(shm_name[i]) == -1){
+            daemon_log("Failed to unlink shared memory", strerror(errno), 1);
+        }
+    }
+
+    if(mq_unlink(MQ_NAME) == -1){
+        daemon_log("Failed to unlink message queue", strerror(errno), 1);
+    }
+    exit(EXIT_SUCCESS);
 }
 int init_daemon(int enable_logging){
     //step 0: create a logfile for our daemon process. This is necessary as we will close all file descriptors during the initialization process
@@ -151,7 +173,7 @@ int init_daemon(int enable_logging){
     //Step 1: Close all file descriptors except for stdin, stdout, and stderr, and our log file.
     int fdlimit = (int)sysconf(_SC_OPEN_MAX);
     for (int i = STDERR_FILENO + 1; i < fdlimit; i++){
-        if(i == log_fd) continue;
+        if(i == log_fd || i == readq) continue;
         close(i);
     }
     
@@ -202,6 +224,6 @@ int init_daemon(int enable_logging){
     chdir("/");
     
     //step 11: Install signal handlers. Currently, this only includes SIGTERM, which is handled by the cleanup daemon function
-    install_signal_handler(SIGTERM, cleanup_daemon);
+    install_signal_handler(SIGTERM , cleanup_daemon);
     return 1;
 }
