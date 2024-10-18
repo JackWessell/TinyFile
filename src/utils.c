@@ -1,6 +1,11 @@
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/time.h>
+#include <stdint.h>
+#include <unistd.h>
+
+#include <fcntl.h>
 
 #include "utils.h"
 int daemon_running(daemon_t *daemon){
@@ -38,4 +43,34 @@ int daemon_running(daemon_t *daemon){
     //If we have made it here, the daemon is currently running.
     fread(&(daemon->msg), sizeof(char), 9, file);
     return 1;
+}
+const int64_t MICROSECONDS_IN_ONE_SECOND = 1000000;
+int64_t timeval_difference_microseconds(struct timeval *start, struct timeval *end)
+{
+    int64_t difference = (end->tv_sec - start->tv_sec) * MICROSECONDS_IN_ONE_SECOND;
+    difference += (end->tv_usec - start->tv_usec);
+    return difference;
+}
+int lock_file(FILE *file) {
+    int fd = fileno(file);
+    struct flock fl;
+    fl.l_type = F_WRLCK;    // Write lock
+    fl.l_whence = SEEK_SET;
+    fl.l_start = 0;         // Offset from l_whence
+    fl.l_len = 0;           // Lock the entire file
+    fl.l_pid = getpid();    // Process ID
+
+    return fcntl(fd, F_SETLKW, &fl);  // F_SETLKW for blocking lock
+}
+
+int unlock_file(FILE *file) {
+    int fd = fileno(file);
+    struct flock fl;
+    fl.l_type = F_UNLCK;    // Unlock
+    fl.l_whence = SEEK_SET;
+    fl.l_start = 0;
+    fl.l_len = 0;
+    fl.l_pid = getpid();
+
+    return fcntl(fd, F_SETLK, &fl);
 }

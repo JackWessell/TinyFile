@@ -91,7 +91,6 @@ void client_read(char *file){
         sem_post(client_sem);
     }
     //save file to configurable output space (eventually)
-    printf("Compression Complete!\n");
     compressed += 1;
 }
 //open a shared memory segment and map it into our address space. If we have already opened it before, we will just return the file descriptor.

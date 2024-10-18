@@ -13,20 +13,20 @@
 #include <semaphore.h>
 #include <signal.h>
 #include <pthread.h> 
+#include <sys/time.h>
+#include <stdint.h>
 
 #include "clientutils.h"
 #include "utils.h"
 #include "mq.h"
 #include "signals.h"
 
-#define LINE_SIZE 128
-
-//some global information for the client. Shmsegs will hold the pointers to global memory for bot the synchronous and asynchronous threads.
+//some global information for the client.
 int id;
 int syncq;
 int asyncq;
 //information necessary to keep track of our pending asynchronous transfers.
-char **backlog;
+struct async_file *backlog;
 int curr_async = -1;
 //Name of file we are currently compressing will be stored in the global variable. Not the cleanest implementation I know...
 int compressed;
@@ -34,7 +34,7 @@ int num;
 int synct;
 //the signal handler for our asynchronous transfers. If we receive a messge beginning with 1, pull a file off of the backlog and set curr_file.
 //If it begins with 2, we are just receiving data and we can simply call client_decode.
-void async_check(){
+void async_check(int *compressed_async){
     char *buf = (char *) malloc(mq_size * sizeof(char));
     int res = recv(asyncq, buf, 2);
     //no messages yet.
@@ -45,13 +45,18 @@ void async_check(){
     //if 2, we are receiving compressed data. Nothing to do as client_decode handles everythin.
     if(buf[0] == '2'){
         client_decode(buf, "");
+        struct timeval tv2;
+        gettimeofday(&tv2, NULL);
+        int time = timeval_difference_microseconds(&(backlog[*compressed_async].start), &tv2);
+        printf("Request %d from process %d took %d microseconds\n", compressed, synct, time);
         free(buf);
+        (*compressed_async)++;
         return;
     }
     //otherwise, we are sending the daemon a file.
     char curr_file[LINE_SIZE];
-    memcpy(curr_file, backlog[curr_async], strlen(backlog[curr_async]));
-    curr_file[strlen(backlog[curr_async])] = '\0';
+    memcpy(curr_file, backlog[curr_async].name, strlen(backlog[curr_async].name));
+    curr_file[strlen(backlog[curr_async].name)] = '\0';
     client_decode(buf, curr_file);
     curr_async++;
     free(buf);
@@ -60,9 +65,9 @@ void async_check(){
 //we have an asynchronous thread that will continually query our async queue. Main thread adds files to the backlog, it pulls them off.
 void *async_thread(void *arg){
     //as long as all files haven't been compressed, continuously check the asynchronous message queue.
+    int compressed_async = 0;
     while(compressed != num){
-        async_check();
-        //printf("Here!\n");
+        async_check(&compressed_async);
     }
     return NULL;
 }
@@ -99,10 +104,7 @@ int main(int argc, char* argv[]){
                 printf("Must include at least one file to compress!");
                 return -1;
             }
-            backlog = malloc(num * sizeof(char*));
-            for(int i = 0; i < num; i++){
-                backlog[i] = (char*) malloc(LINE_SIZE);
-            }
+            backlog = malloc(num * sizeof(struct async_file));
         }
     }
 
@@ -150,6 +152,8 @@ int main(int argc, char* argv[]){
         //last character of each line is the newline character. This will throw of fopen.
         int type = atoi(mode);
         sprintf(buf, "%d|%d|%d|", 1, id, type);
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
         //daemon's write q is synchronous. This part blocks even in mode 1.
         send(writeq, buf, 2);
         //if synchronous we do our work.
@@ -161,11 +165,16 @@ int main(int argc, char* argv[]){
             //wait for daemon to complete its job
             recv(syncq, buf, 2);
             client_decode(buf, file);
+            struct timeval tv2;
+            gettimeofday(&tv2, NULL);
+            int time = timeval_difference_microseconds(&tv,&tv2);
+            printf("Request %d from process %d took %d microseconds\n", compressed, synct, time);
         }
         //transfer mode is asynchronous. We will add the file we need to transfer to our backlog and continue;
         else{
+            backlog[tot_async].start = tv;
             file[strlen(file)-1] = '\0';
-            memcpy(backlog[tot_async], file, strlen(file));
+            memcpy(backlog[tot_async].name, file, strlen(file));
             tot_async++;
             if(curr_async == -1){
                 curr_async = 0; 
@@ -183,9 +192,6 @@ int main(int argc, char* argv[]){
     mq_close(asyncq);
     sprintf(buf, "%d|%d|%s|", 2, id, name);
     send(writeq, buf, 2);
-    for(int i = 0; i < num; i++){
-        free(backlog[i]);
-    }
     free(backlog);
     free(buf);
     return 0;

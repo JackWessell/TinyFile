@@ -14,7 +14,6 @@ int main(int argc, char *argv[]){
     char arg[32];
     for(int i = 30; i < 30 + num; i++){
         sprintf(arg, "/TinyClient%d", i);
-        printf("%s\n", arg);
         char *args[] = {"../bin/TinyClient",  "-n", arg, "--files", "../input/input_mixed.txt", "--num", "20", NULL};
         int pid = fork();
         if(pid == 0){
