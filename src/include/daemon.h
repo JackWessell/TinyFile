@@ -19,8 +19,6 @@ struct clients{
     int clients;
     pthread_mutex_t lock; 
 };
-int log_fd;
-int readq;
 //void reset_all_signal_handlers();
 //void reset_signal_mask();
 //void redirect_output();

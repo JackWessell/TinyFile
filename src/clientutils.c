@@ -34,7 +34,7 @@ void client_write(char *file){
     sem_t *client_sem = (shmseg+32);
     FILE *fp = fopen(file, "r");
     if(fp == NULL){
-        printf("%s", file);
+        printf("%s\n", file);
         perror("File Not Found!");
         //Host should not hang if the file isn't found.
         sprintf(shmseg+64,"%d",0);

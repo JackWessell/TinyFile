@@ -155,9 +155,9 @@ int main(int argc, char* argv[]){
         struct timeval tv;
         gettimeofday(&tv, NULL);
         //daemon's write q is synchronous. This part blocks even in mode 1.
-        send(writeq, buf, 2);
         //if synchronous we do our work.
         if(type == 0){
+            send(writeq, buf, 2);
             file[strlen(file)-1] = '\0';
             //must block signals while receiving.
             recv(syncq, buf, 2);
@@ -179,6 +179,7 @@ int main(int argc, char* argv[]){
             if(curr_async == -1){
                 curr_async = 0; 
             }
+            send(writeq, buf, 2);
         }
     }
     //client may still be waiting on asynchronous requests from other thread.

@@ -18,7 +18,8 @@
 #include "daemon.h"
 #include "signals.h"
 
-
+extern int readq;
+extern int log_fd;
 void daemon_log(const char *format, char *error, int errnum) {
     if (log_fd == -1) return;  // Logging not initialized
 
@@ -53,8 +54,9 @@ int daemon_pid(){
     FILE* pid_file;
     pid_file = fopen(PID_FILE, "r+");
     if(pid_file == NULL){
-        daemon_log("Failed to create PID file. Exiting...", strerror(errno), 1);
-        return -1;
+        pid_file = fopen(PID_FILE, "w");
+        //daemon_log("Failed to create PID file. Exiting...", strerror(errno), 1);
+        //return -1;
     }
     int proc;
     fread(&proc, sizeof(int), 1, pid_file);
@@ -170,6 +172,7 @@ int init_daemon(int enable_logging){
             fprintf(stderr, "Failed to open log file: %s\n", strerror(errno));
         }
     }
+    
     //Step 1: Close all file descriptors except for stdin, stdout, and stderr, and our log file.
     int fdlimit = (int)sysconf(_SC_OPEN_MAX);
     for (int i = STDERR_FILENO + 1; i < fdlimit; i++){
